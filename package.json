@@ -1,0 +1,23 @@
+{
+  "name": "katana",
+  "version": "1.0.0",
+  "author": "nodegin",
+  "description": "The all-in-one media transcode kit",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "repository": "https://github.com/nodegin/katana",
+  "keywords": [
+    "electron",
+    "ffmpeg"
+  ],
+  "devDependencies": {
+    "electron": "^3.0.4"
+  },
+  "dependencies": {
+    "ffmpeg-static-electron": "^2.0.1",
+    "fluent-ffmpeg": "^2.1.2",
+    "fs-extra": "^7.0.1"
+  }
+}
