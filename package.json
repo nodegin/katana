@@ -1,23 +1,97 @@
 {
   "name": "katana",
-  "version": "1.0.0",
   "author": "nodegin",
-  "description": "The all-in-one media transcode kit",
-  "main": "main.js",
+  "version": "0.0.1",
+  "description": "A certain media transcoder",
+  "license": "MIT",
+  "main": "./dist/electron/main.js",
   "scripts": {
-    "start": "electron ."
+    "build": "cross-env NODE_ENV=production npm run pack && electron-builder",
+    "clean": "cross-env BUILD_TARGET=clean node vue-electron/build.js",
+    "dev": "cross-env NODE_ENV=development node vue-electron/dev-runner.js",
+    "lint": "eslint --ext .js,.vue --fix src",
+    "pack": "npm run pack:main && npm run pack:renderer",
+    "pack:main": "webpack --mode production --hide-modules --config vue-electron/webpack.main.config.js",
+    "pack:renderer": "webpack --mode production --hide-modules --config vue-electron/webpack.renderer.config.js",
+    "postinstall": "electron-builder install-app-deps",
+    "rebuild-electron": "./node_modules/.bin/electron-rebuild"
   },
-  "repository": "https://github.com/nodegin/katana",
-  "keywords": [
-    "electron",
-    "ffmpeg"
-  ],
-  "devDependencies": {
-    "electron": "^3.0.4"
+  "build": {
+    "appId": "com.katana.app",
+    "productName": "Katana",
+    "dmg": {
+      "contents": [
+        {
+          "path": "/Applications",
+          "type": "link",
+          "x": 410,
+          "y": 150
+        },
+        {
+          "type": "file",
+          "x": 130,
+          "y": 150
+        }
+      ]
+    },
+    "files": [
+      "dist/electron/**/*"
+    ],
+    "linux": {
+      "icon": "static/icon.png"
+    },
+    "mac": {
+      "icon": "static/icon.png"
+    },
+    "win": {
+      "icon": "static/icon.png",
+      "target": "portable"
+    }
   },
   "dependencies": {
-    "ffmpeg-static-electron": "^2.0.1",
-    "fluent-ffmpeg": "^2.1.2",
-    "fs-extra": "^7.0.1"
+    "vue": "^2.5.17",
+    "vue-electron": "^1.0.6",
+    "vue-router": "^3.0.1",
+    "vuex": "^3.0.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.1.2",
+    "@babel/preset-env": "^7.1.0",
+    "babel-eslint": "^10.0.1",
+    "babel-loader": "^8.0.4",
+    "copy-webpack-plugin": "^4.6.0",
+    "cross-env": "^5.2.0",
+    "css-loader": "^1.0.1",
+    "del": "^3.0.0",
+    "devtron": "^1.4.0",
+    "electron": "~3.0.8",
+    "electron-builder": "^20.31.2",
+    "electron-rebuild": "^1.8.2",
+    "eslint": "^5.8.0",
+    "eslint-config-airbnb-base": "^13.1.0",
+    "eslint-import-resolver-webpack": "^0.10.1",
+    "eslint-loader": "^2.1.1",
+    "eslint-plugin-import": "^2.14.0",
+    "eslint-plugin-vue": "^4.7.1",
+    "file-loader": "^2.0.0",
+    "html-webpack-plugin": "^3.2.0",
+    "inject-loader": "^4.0.1",
+    "less": "^3.8.1",
+    "less-loader": "^4.1.0",
+    "node-loader": "^0.6.0",
+    "node-sass": "^4.10.0",
+    "sass-loader": "^7.1.0",
+    "style-loader": "^0.23.1",
+    "tree-kill": "1.2.1",
+    "url-loader": "^1.1.2",
+    "vue-devtools": "^5.0.0-beta.1",
+    "vue-html-loader": "^1.2.4",
+    "vue-loader": "^15.4.2",
+    "vue-style-loader": "^4.1.2",
+    "vue-template-compiler": "^2.5.17",
+    "webpack": "^4.25.1",
+    "webpack-cli": "^3.1.2",
+    "webpack-dev-server": "^3.1.10",
+    "webpack-hot-middleware": "^2.24.3"
   }
 }

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://i.imgur.com/jG9wA7Q.png" width="80">
+  <img src="https://i.imgur.com/jp3QjEK.png" width="80">
 </p>
 
 <h2 align="center">Katana</h2>
