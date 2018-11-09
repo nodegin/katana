@@ -1,10 +1,6 @@
 <template>
   <div id="app">
     <nav>
-      <div class="drag-region" />
-      <div class="window-controls">
-        <div class="close" @click="closeWindow" />
-      </div>
       <ul>
         <li
           v-for="route in routes" :key="route.path"
@@ -28,18 +24,35 @@
         </transition>
       </section>
     </main>
+    <div class="window-controls">
+      <div class="close" @click="closeWindow" />
+    </div>
+    <div v-if="appError" class="app-error">
+      <pre v-html="JSON.stringify(appError, null, 2)" />
+      <i class="mdi mdi-close" @click="appError = null" />
+    </div>
   </div>
 </template>
 
 <script>
-import { remote } from 'electron'
+import { remote, ipcRenderer } from 'electron'
 
 export default {
   name: 'App',
+  data() {
+    return {
+      appError: null,
+    }
+  },
   computed: {
     routes() {
       return this.$router.options.routes.filter(({ path }) => path !== '/')
     },
+  },
+  mounted() {
+    ipcRenderer.addListener('uncaught-error', (event, error) => {
+      this.appError = error
+    })
   },
   methods: {
     closeWindow() {
@@ -62,32 +75,10 @@ nav {
   background: rgba(33, 44, 66, .4);
   box-shadow: 1px 0 rgba(128, 128, 128, .2);
   flex-shrink: 0;
+  padding-top: 3rem;
   position: relative;
   user-select: none;
   width: 15rem;
-
-  .drag-region {
-    -webkit-app-region: drag;
-    height: 3rem;
-  }
-
-  .window-controls {
-    align-items: center;
-    display: flex;
-    height: 3rem;
-    left: 1rem;
-    position: absolute;
-    top: 0;
-
-    .close {
-      background: #ff5f57;
-      border-radius: 50%;
-      height: .8rem;
-      width: .8rem;
-
-      &:active { background: #bf403b; }
-    }
-  }
 
   ul {
     list-style: none;
@@ -123,7 +114,6 @@ main {
 
   > header {
     align-items: center;
-    -webkit-app-region: drag;
     display: flex;
     height: 3rem;
     left: 15rem;
@@ -142,6 +132,57 @@ main {
     position: absolute;
     right: 0;
     top: 3rem;
+  }
+}
+
+.window-controls {
+  align-items: center;
+  -webkit-app-region: drag;
+  display: flex;
+  height: 3rem;
+  left: 0;
+  padding: 0 1rem;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 100;
+
+  .close {
+    background: #ff5f57;
+    border-radius: 50%;
+    height: .8rem;
+    width: .8rem;
+
+    &:active { background: #bf403b; }
+  }
+}
+
+.app-error {
+  backdrop-filter: blur(10px);
+  background: rgba(64, 10, 10, 0.5);
+  color: #fff;
+  height: 100%;
+  position: fixed;
+  width: 100%;
+  z-index: 200;
+
+  > i {
+    cursor: pointer;
+    font-size: 2rem;
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+  }
+
+  > pre {
+    box-sizing: border-box;
+    font-size: 1.2rem;
+    font-weight: bold;
+    height: 100%;
+    margin: 0;
+    overflow-x: hidden;
+    padding: 3rem;
+    white-space: pre-wrap;
   }
 }
 </style>

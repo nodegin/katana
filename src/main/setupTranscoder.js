@@ -1,6 +1,7 @@
 import path from 'path'
 import fs from 'fs-extra'
 import glob from 'fast-glob'
+import uuidv1 from 'uuid/v1'
 import { ipcMain } from 'electron'
 import { path as ffmpeg } from 'ffmpeg-static'
 import { path as ffprobe } from 'ffprobe-static'
@@ -34,37 +35,46 @@ function probe(file) {
 }
 
 export default function (mainWindow) {
-  ipcMain.on('parse-video-info', async (event, video) => {
-    const { dir, name } = path.parse(video)
-    let entries = await glob(`${escape(path.join(dir, name))}.*`)
-    entries = entries.map(probe)
-    entries = await Promise.all(entries)
-    const videos = []
-    const audios = []
-    const subtitles = []
-    for (const entry of entries) {
-      const { filename } = entry.format
-      for (const stream of entry.streams) {
-        const { codec_type, index, codec_name } = stream
-        switch (codec_type) {
-          case 'video': {
-            console.log(`Found video "${codec_name}" at #${index} (${filename})`)
-            break
-          }
-          case 'audio': {
-            console.log(`Found audio "${codec_name}" at #${index} (${filename})`)
-            break
-          }
-          case 'subtitle': {
-            console.log(`Found subtitle "${codec_name}" at #${index} (${filename})`)
-            break
-          }
-          default: {
-            console.log(`Unknown codec_type "${codec_type}": ${stream} (${filename})`)
-            break
+  ipcMain.on('parse-video-info', async (event, file) => {
+    try {
+      const { dir, name } = path.parse(file)
+      let entries = await glob(`${escape(path.join(dir, name))}.*`)
+      entries = entries.map(probe)
+      entries = await Promise.all(entries)
+      const video = []
+      const audio = []
+      const subtitle = []
+      for (const entry of entries) {
+        const filename = path.basename(entry.format.filename)
+        for (const stream of entry.streams) {
+          const { codec_type, index, codec_name } = stream
+          const _id = uuidv1()
+          switch (codec_type) {
+            case 'video': {
+              console.log(`Found video "${codec_name}" at #${index} (${filename})`)
+              video.push({ _id, filename, index, codec_name })
+              break
+            }
+            case 'audio': {
+              console.log(`Found audio "${codec_name}" at #${index} (${filename})`)
+              audio.push({ _id, filename, index, codec_name })
+              break
+            }
+            case 'subtitle': {
+              console.log(`Found subtitle "${codec_name}" at #${index} (${filename})`)
+              subtitle.push({ _id, filename, index, codec_name })
+              break
+            }
+            default: {
+              console.log(`Unknown codec_type "${codec_type}": ${stream} (${filename})`)
+              break
+            }
           }
         }
       }
+      mainWindow.webContents.send('video-info-parsed', { video, audio, subtitle })
+    } catch ({ message }) {
+      mainWindow.webContents.send('uncaught-error', { error: message })
     }
   })
 }

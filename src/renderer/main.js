@@ -1,6 +1,7 @@
 import Vue from 'vue'
 
 import './assets/style/main.scss'
+import './assets/style/mdi.css'
 
 import App from './App'
 import router from './router'

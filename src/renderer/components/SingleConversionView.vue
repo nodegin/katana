@@ -1,12 +1,33 @@
 <template>
   <div class="container">
-    <pre
-      v-if="debug"
-      style="width: 100%;word-break: break-all;white-space: pre-wrap;"
-      v-html="JSON.stringify(debug, null, 2)"
-    />
-    <template v-else-if="isLoading">
+    <template v-if="isLoading">
       <loader />
+    </template>
+    <template v-else-if="videoInfo">
+      <div v-for="{ type, icon, title } in categories" :key="type" class="video-info">
+        <div class="category">
+          <i :class="`mdi mdi-${icon}`" />
+          <span>{{ title }}</span>
+        </div>
+        <div
+          v-for="track in videoInfo[type]"
+          :key="track._id"
+          :class="{
+            track: true,
+            selected: selectedTracks[type] && selectedTracks[type]._id === track._id,
+          }"
+          @click="updateSelectedTrack(type, track)"
+        >
+          <header>
+            Track {{ track.index }}
+            {{ '&#x3000;' }}
+            {{ track.codec_name }}
+          </header>
+          <footer>
+            File: {{ track.filename }}
+          </footer>
+        </div>
+      </div>
     </template>
     <template v-else>
       <div
@@ -35,18 +56,36 @@ export default {
     return {
       isLoading: false,
       isDragOver: false,
-      debug: null,
+      videoInfo: null,
+      categories: [
+        { type: 'video', title: 'Video', icon: 'filmstrip' },
+        { type: 'audio', title: 'Audio', icon: 'headphones' },
+        { type: 'subtitle', title: 'Subtitle', icon: 'subtitles-outline' },
+      ],
+      selectedTracks: {
+        video: null,
+        audio: null,
+        subtitle: null,
+      },
     }
   },
   beforeDestroy() {
-    ipcRenderer.removeListener('debug', this.debugListener)
+    ipcRenderer.removeListener('video-info-parsed', this.onVideoInfoParsed)
   },
   mounted() {
-    ipcRenderer.addListener('debug', this.debugListener)
+    ipcRenderer.addListener('video-info-parsed', this.onVideoInfoParsed)
   },
   methods: {
-    debugListener(event, data) {
-      this.debug = data
+    onVideoInfoParsed(event, data) {
+      this.isLoading = false
+      this.videoInfo = data
+    },
+    updateSelectedTrack(type, track) {
+      if (this.selectedTracks[type] && this.selectedTracks[type]._id === track._id) {
+        this.selectedTracks[type] = null
+      } else {
+        this.selectedTracks[type] = track
+      }
     },
     handleFileDrop({ dataTransfer: { files: [file] } }) {
       this.isDragOver = false
@@ -64,6 +103,45 @@ export default {
 <style scoped lang="scss">
 .container {
   height: 100%;
+  user-select: none;
+}
+
+.video-info {
+  .category {
+    align-items: center;
+    display: flex;
+    font-size: 1.5rem;
+    height: 4rem;
+
+    > i { margin: 0 2rem; }
+  }
+
+  .track {
+    border: 2px solid #45556b;
+    cursor: pointer;
+    padding: 1rem 2rem;
+    transition: border-color .2s;
+
+    & + .track {
+      margin-top: -2px;
+    }
+
+    &.selected {
+      border-color: #86e3ff;
+      position: relative;
+      z-index: 1;
+    }
+
+    header {
+      font-size: 1.2rem;
+    }
+
+    footer {
+      color: #afafaf;
+      font-size: .9rem;
+      margin-top: .5rem;
+    }
+  }
 }
 
 .video-dropzone {

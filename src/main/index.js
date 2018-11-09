@@ -103,5 +103,5 @@ app.on('activate', () => {
 })
 
 process.on('uncaughtException', (err) => {
-  mainWindow.webContents.send('debug', { error: err.message })
+  mainWindow.webContents.send('uncaught-error', { error: err.message })
 })
