@@ -21,7 +21,7 @@
           <header>
             Track {{ track.index }}
             {{ '&#x3000;' }}
-            {{ track.codec_name }}
+            {{ track.codec_name }} ({{ track.language }})
           </header>
           <footer>
             File: {{ track.filename }}
