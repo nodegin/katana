@@ -1,6 +1,6 @@
 import Vue from 'vue'
 
-import './assets/style/main.sass'
+import './assets/style/main.scss'
 
 import App from './App'
 import router from './router'
@@ -13,9 +13,7 @@ Vue.use(require('vue-electron'))
 
 /* eslint-disable no-new */
 new Vue({
-  components: {
-    App,
-  },
+  components: { App },
   router,
   store,
   template: '<App/>',

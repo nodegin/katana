@@ -1,5 +1,6 @@
-// eslint-disable-next-line
 import { app, BrowserWindow } from 'electron'
+import setupTranscoder from './setupTranscoder'
+
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = true
 
 let mainWindow
@@ -46,10 +47,11 @@ function createWindow() {
    */
   mainWindow = new BrowserWindow({
     useContentSize: true,
-    width: 800,
-    height: 600,
+    width: 1080,
+    height: 720,
     transparent: true,
     frame: false,
+    fullscreenable: false,
     resizable: false,
     vibrancy: 'dark',
     webPreferences: {
@@ -68,12 +70,11 @@ function createWindow() {
     mainWindow.show()
     mainWindow.focus()
 
-    if (
-      process.env.ELECTRON_ENV === 'development'
-      || process.argv.indexOf('--debug') !== -1
-    ) {
+    if (process.env.ELECTRON_ENV === 'development') {
       mainWindow.webContents.openDevTools()
     }
+
+    setupTranscoder(mainWindow)
   })
 
   mainWindow.on('closed', () => {
@@ -99,4 +100,8 @@ app.on('activate', () => {
   if (mainWindow === null) {
     createWindow()
   }
+})
+
+process.on('uncaughtException', (err) => {
+  mainWindow.webContents.send('debug', { error: err.message })
 })

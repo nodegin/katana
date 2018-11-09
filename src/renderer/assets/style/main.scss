@@ -1,0 +1,29 @@
+// router animation
+
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: all 0.1s ease-out;
+}
+
+.slide-right-enter,
+.slide-right-leave-to {
+  opacity: 0;
+  transform: translateX(-25px);
+}
+
+// main
+
+@font-face {
+  font-family: 'PS';
+  font-style: normal;
+  font-weight: 400;
+  src: url(ps.woff2) format('woff2');
+  unicode-range: U+0000-00FF;
+}
+
+body {
+  background: rgba(0, 0, 0, .5);
+  color: #fff;
+  font: 1rem 'PS', sans-serif;
+  margin: 0;
+}
