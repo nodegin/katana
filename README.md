@@ -15,5 +15,8 @@ Provides the following functionalities:
 npm install
 
 # Run the app
-npm start
+npm run dev
+
+# Build production package
+npm run build
 ```
