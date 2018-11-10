@@ -3,6 +3,7 @@ import glob from 'glob'
 import fs from 'fs-extra'
 import uuidv1 from 'uuid/v1'
 import { ipcMain } from 'electron'
+import { PassThrough } from 'stream'
 import { path as ffmpeg } from 'ffmpeg-static'
 import { path as ffprobe } from 'ffprobe-static'
 import FfmpegCommand from 'fluent-ffmpeg'
@@ -21,14 +22,17 @@ FfmpegCommand.setFfmpegPath(fixPathForAsarUnpack(ffmpeg))
 FfmpegCommand.setFfprobePath(fixPathForAsarUnpack(ffprobe))
 
 function escape(string) {
-  const chars = ['*', '+', '?', '!', '{', '}', '[', ']', '(', ')', '|', '@'];
-  return string.replace(new RegExp('[' + '\\' + chars.join('\\') + ']', 'g'), (match) => `\\${match}`)
+  const chars = ['*', '+', '?', '!', '{', '}', '[', ']', '(', ')', '|', '@']
+  return string.replace(new RegExp(`[\\${chars.join('\\')}]`, 'g'), (match) => `\\${match}`)
 }
 
 function probe(file) {
   return new Promise((resolve, reject) => {
     FfmpegCommand.ffprobe(file, (err, result) => {
-      if (err) return reject(err)
+      if (err) {
+        reject(err)
+        return
+      }
       resolve(result)
     })
   })
@@ -47,27 +51,49 @@ export default function (mainWindow) {
         const audio = []
         const subtitle = []
         for (const entry of entries) {
-          const filename = path.basename(entry.format.filename)
+          const external = entry.format.filename !== file
+          const { filename } = entry.format
+          const totalSubtitles = entry.streams.filter(({ codec_type: t }) => t === 'subtitle').length
           for (const stream of entry.streams) {
-            console.log(stream)
-            const { codec_type, index, codec_name, tags } = stream
-            const language = tags ? tags.language : 'und'
             const _id = uuidv1()
-            switch (codec_type) {
+            const {
+              codec_type: type,
+              index,
+              codec_name: codec,
+              tags,
+            } = stream
+            const title = tags ? tags.title : null
+            const language = tags ? tags.language : null
+            const info = {
+              _id,
+              external,
+              index,
+              filename,
+              codec,
+              title,
+              language,
+            }
+            switch (type) {
               case 'video': {
-                video.push({ _id, filename, index, codec_name, language })
+                const { width, height } = stream
+                video.push({ ...info, width, height })
                 break
               }
               case 'audio': {
-                audio.push({ _id, filename, index, codec_name, language })
+                audio.push(info)
                 break
               }
               case 'subtitle': {
-                subtitle.push({ _id, filename, index, codec_name, language })
+                // real index of internal subtitle used by subtitles filter
+                let rIndex = 0
+                if (!external) {
+                  rIndex = index - totalSubtitles - 1
+                }
+                subtitle.push({ ...info, rIndex })
                 break
               }
               default: {
-                console.log(`Unknown codec_type "${codec_type}": ${stream} (${filename})`)
+                console.log(`Unknown codec type "${type}": ${JSON.stringify(stream)} (${filename})`)
                 break
               }
             }
@@ -78,5 +104,66 @@ export default function (mainWindow) {
         mainWindow.webContents.send('uncaught-error', { error: message })
       }
     })
+  })
+
+  ipcMain.on('video-transcode-start', async (event, { video, audio, subtitle }) => {
+    try {
+      const output = `${video.filename.split('.')[0]}_out.mp4`
+
+      await fs.remove(output)
+      const previewStream = new PassThrough()
+      const writeStream = fs.createWriteStream(output)
+
+      let command = FfmpegCommand()
+        .input(video.filename)
+        .audioCodec('aac')
+        .audioChannels(2)
+        .videoCodec('libx264')
+
+      if (['dvd_subtitle', 'hdmv_pgs_subtitle'].indexOf(subtitle.codec) >= 0) {
+        // picture sub
+        command = command.complexFilter(`[0:s:${subtitle.rIndex}]scale=${video.width}:${video.height}[sub];[0:v][sub]overlay'`)
+      } else {
+        // text sub
+        command = command.videoFilters(`subtitles='${subtitle.filename}:si=${subtitle.rIndex}'`)
+      }
+
+      command = command.outputOptions([
+          '-x264-params keyint=48:scenecut=0',
+          '-pix_fmt yuv420p',
+          `-map 0:${video.index}`,
+          `-map 0:${audio.index}`,
+          '-map_chapters -1',
+          '-map_metadata -1',
+          '-vsync 2',
+          '-reset_timestamps 1',
+          '-preset fast',
+          '-crf 18',
+          '-threads 0',
+          '-movflags frag_keyframe+default_base_moof',
+        ])
+        .outputFormat('mp4')
+        .on('progress', (progress) => {
+          mainWindow.webContents.send('video-transcode-progress', progress)
+        })
+        .on('error', (err, stdout, stderr) => {
+          console.log('An error occurred: ' + err.message, stderr)
+        })
+
+      previewStream.on('data', (chunk) => {
+        writeStream.write(chunk)
+        mainWindow.webContents.send('video-chunk', chunk)
+      })
+
+      previewStream.on('end', () => {
+        writeStream.end()
+        mainWindow.webContents.send('video-transcode-finished')
+      })
+
+      mainWindow.webContents.send('video-transcode-started')
+      command.pipe(previewStream)
+    } catch (err) {
+      console.log(err)
+    }
   })
 }

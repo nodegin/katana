@@ -18,7 +18,7 @@
   font-style: normal;
   font-weight: 400;
   src: url(ps.woff2) format('woff2');
-  unicode-range: U+0000-00FF;
+  unicode-range: U+0020-007E;
 }
 
 body {
@@ -26,4 +26,10 @@ body {
   color: #fff;
   font: 1rem 'PS', sans-serif;
   margin: 0;
+  user-select: none;
+}
+
+a {
+  color: #86e3ff;
+  text-decoration: none;
 }

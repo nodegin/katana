@@ -1,8 +1,27 @@
 <template>
-  <div class="container">
+  <main>
     <template v-if="isLoading">
       <loader />
     </template>
+    <div v-else-if="isFinished" class="transcode-finished">
+      <div>
+        <i class="mdi mdi-check" />
+        <h1>Transcode Finished</h1>
+        <a href="#" @click.prevent="startOver">Done</a>
+      </div>
+    </div>
+    <div v-else-if="isTranscoding" class="transcode-detail">
+      <video ref="preview" autoplay width="100%" @click="toggleMute" />
+      <h1>Transcode In Progress</h1>
+      <div v-if="currentProgress" class="progress">
+        <span>{{ currentProgress.currentFps }} fps</span>
+        <span>{{ currentProgress.currentKbps }} kbits/s</span>
+        <span>{{ currentProgress.percent.toFixed(1) }}%</span>
+      </div>
+      <div v-if="currentProgress" class="progress-bar">
+        <ins :style="{ width: `${currentProgress.percent}%` }" />
+      </div>
+    </div>
     <template v-else-if="videoInfo">
       <div v-for="{ type, icon, title } in categories" :key="type" class="video-info">
         <div class="category">
@@ -19,15 +38,31 @@
           @click="updateSelectedTrack(type, track)"
         >
           <header>
-            Track {{ track.index }}
-            {{ '&#x3000;' }}
-            {{ track.codec_name }} ({{ track.language }})
+            <div class="track-index">
+              {{ track.external ? 'External' : 'Internal' }} Track
+              <template v-if="type === 'subtitle' && !track.external">
+                {{ `${track.index} -> ${track.rIndex}` }}
+              </template>
+              <template v-else>
+                {{ track.index }}
+              </template>
+            </div>
+            {{ track.title }}
+            <template v-if="type === 'video'">
+              ({{ track.width }}x{{ track.height }})
+            </template>
+            <div class="spacer" />
+            {{ track.codec }} ({{ track.language || 'und' }})
           </header>
-          <footer>
-            File: {{ track.filename }}
-          </footer>
+          <footer>{{ basename(track.filename) }}</footer>
         </div>
       </div>
+      <portal to="route-actions">
+        <button @click="startTranscode">
+          Next
+          <i class="mdi mdi-chevron-right" />
+        </button>
+      </portal>
     </template>
     <template v-else>
       <div
@@ -37,15 +72,18 @@
         @dragleave="isDragOver = false"
         @drop.prevent="handleFileDrop"
       >
-        {{ isDragOver ? 'Drop here' : 'Drag video stream over here' }}
+        {{ isDragOver ? 'Drop stream here' : 'Drag video stream over here' }}
       </div>
     </template>
-  </div>
+  </main>
 </template>
 
 <script>
+import path from 'path'
 import { ipcRenderer } from 'electron'
 import Loader from '@/components/Loader'
+
+const BUFFER_SIZE = 50 * 1024 * 1024 // 50 mb per chunk. is it possible to have bigger than this?
 
 export default {
   name: 'SingleConversionView',
@@ -67,26 +105,33 @@ export default {
         audio: null,
         subtitle: null,
       },
+      isTranscoding: false,
+      currentProgress: null,
+      // preview stuff
+      bufferIndex: 0,
+      fragMp4Buffer: null,
+      mediaSource: null,
+      sourceBuffer: null,
+      lastUpdate: 0,
+      // end preview stuff
+      isFinished: false,
     }
   },
   beforeDestroy() {
     ipcRenderer.removeListener('video-info-parsed', this.onVideoInfoParsed)
+    ipcRenderer.removeListener('video-transcode-started', this.onVideoTranscodeStarted)
+    ipcRenderer.removeListener('video-transcode-progress', this.onVideoTranscodeProgress)
+    ipcRenderer.removeListener('video-chunk', this.onVideoChunk)
+    ipcRenderer.removeListener('video-transcode-finished', this.onVideoTranscodeFinished)
   },
   mounted() {
     ipcRenderer.addListener('video-info-parsed', this.onVideoInfoParsed)
+    ipcRenderer.addListener('video-transcode-started', this.onVideoTranscodeStarted)
+    ipcRenderer.addListener('video-transcode-progress', this.onVideoTranscodeProgress)
+    ipcRenderer.addListener('video-chunk', this.onVideoChunk)
+    ipcRenderer.addListener('video-transcode-finished', this.onVideoTranscodeFinished)
   },
   methods: {
-    onVideoInfoParsed(event, data) {
-      this.isLoading = false
-      this.videoInfo = data
-    },
-    updateSelectedTrack(type, track) {
-      if (this.selectedTracks[type] && this.selectedTracks[type]._id === track._id) {
-        this.selectedTracks[type] = null
-      } else {
-        this.selectedTracks[type] = track
-      }
-    },
     handleFileDrop({ dataTransfer: { files: [file] } }) {
       this.isDragOver = false
       if (!file) {
@@ -96,14 +141,162 @@ export default {
       ipcRenderer.send('parse-video-info', file.path)
       this.isLoading = true
     },
+    onVideoInfoParsed(event, data) {
+      this.isLoading = false
+      this.videoInfo = data
+    },
+    basename(filename) {
+      return path.basename(filename)
+    },
+    updateSelectedTrack(type, track) {
+      if (this.selectedTracks[type] && this.selectedTracks[type]._id === track._id) {
+        this.selectedTracks[type] = null
+      } else {
+        this.selectedTracks[type] = track
+      }
+    },
+    startTranscode() {
+      const { video, audio, subtitle } = this.selectedTracks
+      if (!video) {
+        alert('Video track not selected')
+        return
+      }
+      if (!audio) {
+        alert('Audio track not selected')
+        return
+      }
+      if (!subtitle) {
+        alert('Subtitle track not selected')
+        return
+      }
+      ipcRenderer.send('video-transcode-start', { video, audio, subtitle })
+      this.isLoading = true
+    },
+    async onVideoTranscodeStarted() {
+      this.isTranscoding = true
+      this.isLoading = false
+      await this.$nextTick()
+      this.fragMp4Buffer = new Uint8Array(BUFFER_SIZE)
+      this.mediaSource = new MediaSource()
+      // this.mediaSource.addEventListener('sourceended', () => {
+      //   console.log(`[MediaSource] sourceended: ${this.mediaSource.readyState}`)
+      // })
+      // this.mediaSource.addEventListener('sourceclose', () => {
+      //   console.log(`[MediaSource] sourceclose: ${this.mediaSource.readyState}`)
+      // })
+      // this.mediaSource.addEventListener('error', () => {
+      //   console.log(`[MediaSource] error: ${this.mediaSource.readyState}`)
+      // })
+      this.mediaSource.addEventListener('sourceopen', () => {
+        this.sourceBuffer = this.mediaSource.addSourceBuffer('video/mp4; codecs="avc1.640028, mp4a.40.2"')
+      })
+      this.$refs.preview.src = window.URL.createObjectURL(this.mediaSource)
+    },
+    toggleMute() {
+      this.$refs.preview.muted = !this.$refs.preview.muted
+    },
+    onVideoTranscodeProgress(event, progress) {
+      this.currentProgress = progress
+    },
+    onVideoChunk(event, chunk) {
+      if (!chunk.length) {
+        return
+      }
+      if ((this.bufferIndex + chunk.length) > BUFFER_SIZE) {
+        return
+      }
+      // console.log('Received video chunk with size ', chunk.length)
+      this.fragMp4Buffer.set(chunk, this.bufferIndex)
+      this.bufferIndex = this.bufferIndex + chunk.length
+
+      if (this.sourceBuffer.updating || this.mediaSource.readyState !== 'open') {
+        return
+      }
+
+      const now = Date.now()
+      if (now - this.lastUpdate > 999) {
+        const buf = this.fragMp4Buffer.slice(0, this.bufferIndex)
+        this.sourceBuffer.appendBuffer(buf)
+        this.fragMp4Buffer.fill(0)
+        this.bufferIndex = 0
+        // preview last second
+        const { preview } = this.$refs
+        if (preview.duration) {
+          preview.currentTime = Math.max(0, preview.duration - 1)
+        }
+        this.lastUpdate = now
+      }
+    },
+    onVideoTranscodeFinished() {
+      this.isTranscoding = false
+      this.sourceBuffer.abort()
+      this.mediaSource.removeSourceBuffer(this.sourceBuffer)
+      window.URL.revokeObjectURL(this.$refs.preview.src)
+      this.isFinished = true
+    },
+    startOver() {
+      const { path } = this.$route
+      this.$router.push({ path: '/404' })
+      this.$nextTick(() => this.$router.push({ path }))
+    },
   },
 }
 </script>
 
 <style scoped lang="scss">
-.container {
+.transcode-finished {
+  align-items: center;
+  display: flex;
   height: 100%;
-  user-select: none;
+  justify-content: center;
+
+  > div {
+    text-align: center;
+
+    > i {
+      color: #85d085;
+      font-size: 5rem;
+    }
+
+    > h1 {
+      margin: 2rem 0;
+    }
+  }
+}
+
+.transcode-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+
+  > h1 {
+    height: 4rem;
+    line-height: 4rem;
+    text-align: center;
+    width: 100%;
+  }
+
+  > .progress {
+    align-items: center;
+    display: flex;
+    flex: 1;
+    font-size: 1.2rem;
+    justify-content: space-around;
+  }
+
+  > .progress-bar {
+    align-items: center;
+    display: flex;
+    height: 4rem;
+    padding: 0 2rem;
+
+    > ins {
+      background: #86e3ff;
+      border-radius: 4px;
+      display: block;
+      height: 4px;
+    }
+  }
 }
 
 .video-info {
@@ -117,7 +310,7 @@ export default {
   }
 
   .track {
-    border: 2px solid #45556b;
+    border: 2px solid #455d6b;
     cursor: pointer;
     padding: 1rem 2rem;
     transition: border-color .2s;
@@ -133,27 +326,38 @@ export default {
     }
 
     header {
+      display: flex;
       font-size: 1.2rem;
+
+      .track-index {
+        color: #86e3ff;
+        width: 14rem;
+      }
+      .spacer { flex: 1; }
     }
 
     footer {
       color: #afafaf;
       font-size: .9rem;
       margin-top: .5rem;
+      word-break: break-all;
     }
   }
 }
 
 .video-dropzone {
   align-items: center;
-  border: 2px dashed rgba(182, 201, 255, .5);
+  border: 2px dashed #455d6b;
   border-radius: 1rem;
+  bottom: 2rem;
   box-sizing: border-box;
-  color: #b6c9ff;
+  color: #86e3ff;
   display: flex;
   font-size: 1.5rem;
-  height: calc(100% - 2rem);
   justify-content: center;
-  margin: 0 2rem 2rem;
+  left: 2rem;
+  position: absolute;
+  right: 2rem;
+  top: 2rem;
 }
 </style>

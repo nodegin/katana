@@ -1,6 +1,10 @@
 <template>
   <div id="app">
     <nav>
+      <div class="window-controls">
+        <div class="button close" @click="closeWindow" />
+        <div class="button minimize" @click="minimizeWindow" />
+      </div>
       <ul>
         <li
           v-for="route in routes" :key="route.path"
@@ -12,20 +16,18 @@
         </li>
       </ul>
     </nav>
-    <main>
+    <div class="view-container">
       <header>
         <transition name="slide-right" mode="out-in">
-          <span :key="$route.path">{{ $route.meta.title }}</span>
+          <span :key="$route.path" class="title">{{ $route.meta.title }}</span>
         </transition>
+        <portal-target name="route-actions" class="route-actions" />
       </header>
       <section class="view">
         <transition name="slide-right" mode="out-in">
           <router-view/>
         </transition>
       </section>
-    </main>
-    <div class="window-controls">
-      <div class="close" @click="closeWindow" />
     </div>
     <div v-if="appError" class="app-error">
       <pre v-html="JSON.stringify(appError, null, 2)" />
@@ -58,6 +60,9 @@ export default {
     closeWindow() {
       remote.getCurrentWindow().close()
     },
+    minimizeWindow() {
+      remote.getCurrentWindow().minimize()
+    },
   },
 }
 </script>
@@ -75,10 +80,37 @@ nav {
   background: rgba(33, 44, 66, .4);
   box-shadow: 1px 0 rgba(128, 128, 128, .2);
   flex-shrink: 0;
-  padding-top: 3rem;
   position: relative;
-  user-select: none;
   width: 15rem;
+
+  .window-controls {
+    align-items: center;
+    -webkit-app-region: drag;
+    display: flex;
+    height: 3rem;
+    padding: 0 1rem;
+    width: 100%;
+
+    > .button {
+      border-radius: 50%;
+      height: .8rem;
+      width: .8rem;
+
+      &:not(:first-child) {
+        margin-left: .6rem;
+      }
+    }
+
+    > .close {
+      background: #ff5f57;
+      &:active { background: #bf403b; }
+    }
+
+    > .minimize {
+      background: #ffbe2f;
+      &:active { background: #bf9123; }
+    }
+  }
 
   ul {
     list-style: none;
@@ -107,53 +139,67 @@ nav {
   }
 }
 
-main {
+.view-container {
   background: linear-gradient(to right, rgba(58, 99, 119, 0.1), rgba(17, 61, 107, .15));
   flex: 1;
   position: relative;
 
   > header {
     align-items: center;
+    -webkit-app-region: drag;
     display: flex;
     height: 3rem;
     left: 15rem;
     padding: 0 2rem;
     position: fixed;
     right: 0;
-    user-select: none;
     z-index: 2;
+
+    .title {
+      flex: 1;
+    }
+
+    .route-actions > :global(button) {
+      background: rgba(108, 110, 110, .8);
+      border: 0;
+      border-radius: 4px;
+      box-shadow: 0 0 1px rgba(0, 0, 0, .25), inset 0 1px rgba(255, 255, 255, .1);
+      color: #fff;
+      font: inherit;
+      font-size: .9rem;
+      height: 1.5rem;
+      outline: 0;
+
+      &:active {
+        background: rgba(128, 130, 130, .85);
+      }
+    }
   }
 
   > .view {
     bottom: 0;
     left: 0;
     overflow-x: hidden;
-    // -ms-overflow-style: scrollbar;
     position: absolute;
     right: 0;
     top: 3rem;
-  }
-}
 
-.window-controls {
-  align-items: center;
-  -webkit-app-region: drag;
-  display: flex;
-  height: 3rem;
-  left: 0;
-  padding: 0 1rem;
-  position: absolute;
-  right: 0;
-  top: 0;
-  z-index: 100;
+    > main {
+      height: 100%;
+      position: relative;
+    }
 
-  .close {
-    background: #ff5f57;
-    border-radius: 50%;
-    height: .8rem;
-    width: .8rem;
+    &::-webkit-scrollbar {
+      width: .6rem;
+    }
 
-    &:active { background: #bf403b; }
+    &::-webkit-scrollbar-thumb {
+      background-color: #14a8ca;
+      background-clip: content-box;
+      border: 0 solid transparent;
+      border-width: 3px 0 3px 6px;
+      border-radius: 1rem 0 0 1rem;
+    }
   }
 }
 
