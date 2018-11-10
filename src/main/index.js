@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from 'electron'
+import Vibrancy from 'acrylic-vibrancy'
 import setupTranscoder from './setupTranscoder'
 
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = true
@@ -52,6 +53,7 @@ function createWindow() {
     transparent: true,
     frame: false,
     fullscreenable: false,
+    maximizable: false,
     resizable: false,
     vibrancy: 'dark',
     webPreferences: {
@@ -67,11 +69,15 @@ function createWindow() {
 
   // Show when loaded
   mainWindow.on('ready-to-show', () => {
+    if (process.platform === 'win32') {
+      Vibrancy.SetAcrylic(mainWindow)
+    }
+
     mainWindow.show()
     mainWindow.focus()
 
-    if (process.env.ELECTRON_ENV === 'development') {
-      mainWindow.webContents.openDevTools()
+    if (process.env.NODE_ENV === 'development') {
+      mainWindow.webContents.openDevTools({ mode: 'detach' })
     }
 
     setupTranscoder(mainWindow)

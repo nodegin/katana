@@ -1,5 +1,4 @@
 import path from 'path'
-import glob from 'glob'
 import fs from 'fs-extra'
 import uuidv1 from 'uuid/v1'
 import { ipcMain } from 'electron'
@@ -21,11 +20,6 @@ function fixPathForAsarUnpack(path) {
 FfmpegCommand.setFfmpegPath(fixPathForAsarUnpack(ffmpeg))
 FfmpegCommand.setFfprobePath(fixPathForAsarUnpack(ffprobe))
 
-function escape(string) {
-  const chars = ['*', '+', '?', '!', '{', '}', '[', ']', '(', ')', '|', '@']
-  return string.replace(new RegExp(`[\\${chars.join('\\')}]`, 'g'), (match) => `\\${match}`)
-}
-
 function probe(file) {
   return new Promise((resolve, reject) => {
     FfmpegCommand.ffprobe(file, (err, result) => {
@@ -38,72 +32,78 @@ function probe(file) {
   })
 }
 
+async function globSubtitles(video) {
+  const dir = path.dirname(video)
+  const [base, ext] = path.basename(video).split('.')
+  const re = new RegExp(`\\.(ass|srt|ssa|${ext})$`, 'i')
+  const results = await fs.readdir(dir)
+  return results
+    .filter((file) => file.startsWith(base) && re.test(file))
+    .map((file) => path.join(dir, file))
+}
+
 export default function (mainWindow) {
-  ipcMain.on('parse-video-info', (event, file) => {
-    const { dir, name } = path.parse(file)
-    glob(`${escape(path.join(dir, name))}.*`, async (err, files) => {
-      try {
-        if (err) {
-          throw err
-        }
-        const entries = await Promise.all(files.map(probe))
-        const video = []
-        const audio = []
-        const subtitle = []
-        for (const entry of entries) {
-          const external = entry.format.filename !== file
-          const { filename } = entry.format
-          const firstSubtitle = entry.streams.find(({ codec_type: t }) => t === 'subtitle').index
-          for (const stream of entry.streams) {
-            const _id = uuidv1()
-            const {
-              codec_type: type,
-              index,
-              codec_name: codec,
-              tags,
-            } = stream
-            const title = tags ? tags.title : null
-            const language = tags ? tags.language : null
-            const info = {
-              _id,
-              external,
-              index,
-              filename,
-              codec,
-              title,
-              language,
+  ipcMain.on('parse-video-info', async (event, file) => {
+    try {
+      let entries = await globSubtitles(file)
+      console.log(entries)
+      entries = await Promise.all(entries.map(probe))
+      const video = []
+      const audio = []
+      const subtitle = []
+      for (const entry of entries) {
+        const external = entry.format.filename !== file
+        const { filename } = entry.format
+        const firstSubtitle = entry.streams.find(({ codec_type: t }) => t === 'subtitle')
+        for (const stream of entry.streams) {
+          const _id = uuidv1()
+          const {
+            codec_type: type,
+            index,
+            codec_name: codec,
+            tags,
+          } = stream
+          const title = tags ? tags.title : null
+          const language = tags ? tags.language : null
+          const info = {
+            _id,
+            external,
+            index,
+            filename,
+            codec,
+            title,
+            language,
+          }
+          switch (type) {
+            case 'video': {
+              const { width, height } = stream
+              video.push({ ...info, width, height })
+              break
             }
-            switch (type) {
-              case 'video': {
-                const { width, height } = stream
-                video.push({ ...info, width, height })
-                break
+            case 'audio': {
+              audio.push(info)
+              break
+            }
+            case 'subtitle': {
+              // real index of internal subtitle used by subtitles filter
+              let rIndex = 0
+              if (!external) {
+                rIndex = index - firstSubtitle.index
               }
-              case 'audio': {
-                audio.push(info)
-                break
-              }
-              case 'subtitle': {
-                // real index of internal subtitle used by subtitles filter
-                let rIndex = 0
-                if (!external) {
-                  rIndex = index - firstSubtitle
-                }
-                subtitle.push({ ...info, rIndex })
-                break
-              }
-              default: {
-                console.log(`Unknown codec type "${type}": ${JSON.stringify(stream)} (${filename})`)
-                break
-              }
+              subtitle.push({ ...info, rIndex })
+              break
+            }
+            default: {
+              console.log(`Unknown codec type "${type}": ${JSON.stringify(stream)} (${filename})`)
+              break
             }
           }
         }
-        mainWindow.webContents.send('video-info-parsed', { video, audio, subtitle })
-      } catch ({ message }) {
-        mainWindow.webContents.send('uncaught-error', { error: message })
       }
-    })
+      mainWindow.webContents.send('video-info-parsed', { video, audio, subtitle })
+    } catch ({ message }) {
+      mainWindow.webContents.send('uncaught-error', { error: message })
+    }
   })
 
   ipcMain.on('video-transcode-start', async (event, { video, audio, subtitle }) => {
