@@ -82,6 +82,7 @@ nav {
   flex-shrink: 0;
   position: relative;
   width: 15rem;
+  z-index: 100;
 
   .window-controls {
     align-items: center;
@@ -144,6 +145,7 @@ nav {
   background: linear-gradient(to right, rgba(58, 99, 119, 0.1), rgba(17, 61, 107, .15));
   flex: 1;
   position: relative;
+  z-index: 100;
 
   > header {
     align-items: center;
@@ -206,6 +208,7 @@ nav {
 }
 
 .app-error {
+  -webkit-app-region: no-drag; // override
   backdrop-filter: blur(10px);
   background: rgba(64, 10, 10, 0.5);
   color: #fff;

@@ -52,6 +52,7 @@ function createWindow() {
     transparent: true,
     frame: false,
     fullscreenable: false,
+    maximizable: false,
     resizable: false,
     vibrancy: 'dark',
     webPreferences: {
@@ -70,8 +71,8 @@ function createWindow() {
     mainWindow.show()
     mainWindow.focus()
 
-    if (process.env.ELECTRON_ENV === 'development') {
-      mainWindow.webContents.openDevTools()
+    if (process.env.NODE_ENV === 'development') {
+      mainWindow.webContents.openDevTools({ mode: 'detach' })
     }
 
     setupTranscoder(mainWindow)
