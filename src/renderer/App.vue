@@ -88,16 +88,17 @@ nav {
     -webkit-app-region: drag;
     display: flex;
     height: 3rem;
-    padding: 0 1rem;
+    padding: 0 12px;
     width: 100%;
 
     > .button {
+      -webkit-app-region: no-drag;
       border-radius: 50%;
-      height: .8rem;
-      width: .8rem;
+      height: 12px;
+      width: 12px;
 
       &:not(:first-child) {
-        margin-left: .6rem;
+        margin-left: 8px;
       }
     }
 
