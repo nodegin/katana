@@ -10,13 +10,14 @@
         <a href="#" @click.prevent="startOver">Done</a>
       </div>
     </div>
-    <div v-else-if="isTranscoding" class="transcode-detail">
+    <div v-else-if="transcodeStartTime" class="transcode-detail">
       <video ref="preview" autoplay width="100%" @click="toggleMute" />
       <h1>Transcode In Progress</h1>
       <div v-if="currentProgress" class="progress">
         <span>{{ currentProgress.currentFps }} fps</span>
         <span>{{ currentProgress.currentKbps }} kbits/s</span>
         <span>{{ currentProgress.percent.toFixed(1) }}%</span>
+        <span>ETA {{ completionETA }}</span>
       </div>
       <div v-if="currentProgress" class="progress-bar">
         <ins :style="{ width: `${currentProgress.percent}%` }" />
@@ -105,7 +106,7 @@ export default {
         audio: null,
         subtitle: null,
       },
-      isTranscoding: false,
+      transcodeStartTime: null,
       currentProgress: null,
       // preview stuff
       bufferIndex: 0,
@@ -116,6 +117,24 @@ export default {
       // end preview stuff
       isFinished: false,
     }
+  },
+  computed: {
+    completionETA() {
+      const elapsedTime = Date.now() - this.transcodeStartTime
+      const remainMills = (elapsedTime * 100) / this.currentProgress.percent
+      let remainSeconds = Math.floor(remainMills / 1000)
+      const hours = Math.floor(remainSeconds / 3600)
+      remainSeconds %= 3600
+      let minutes = Math.floor(remainSeconds / 60).toString()
+      let seconds = (remainSeconds % 60).toString()
+      minutes = `0${minutes}`.slice(-2)
+      seconds = `0${seconds}`.slice(-2)
+      const parts = [minutes, seconds]
+      if (hours > 0) {
+        parts.unshift(hours)
+      }
+      return parts.join(':')
+    },
   },
   beforeDestroy() {
     ipcRenderer.removeListener('video-info-parsed', this.onVideoInfoParsed)
@@ -173,7 +192,7 @@ export default {
       this.isLoading = true
     },
     async onVideoTranscodeStarted() {
-      this.isTranscoding = true
+      this.transcodeStartTime = Date.now()
       this.isLoading = false
       await this.$nextTick()
       this.fragMp4Buffer = new Uint8Array(BUFFER_SIZE)
@@ -228,7 +247,6 @@ export default {
       }
     },
     onVideoTranscodeFinished() {
-      this.isTranscoding = false
       this.sourceBuffer.abort()
       this.mediaSource.removeSourceBuffer(this.sourceBuffer)
       window.URL.revokeObjectURL(this.$refs.preview.src)
