@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from 'electron'
+import Vibrancy from 'acrylic-vibrancy'
 import setupTranscoder from './setupTranscoder'
 
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = true
@@ -68,6 +69,10 @@ function createWindow() {
 
   // Show when loaded
   mainWindow.on('ready-to-show', () => {
+    if (process.platform === 'win32') {
+      Vibrancy.SetAcrylic(mainWindow)
+    }
+
     mainWindow.show()
     mainWindow.focus()
 

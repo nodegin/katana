@@ -134,6 +134,7 @@ nav {
         color: inherit;
         display: flex;
         height: 3rem;
+        outline: 0 !important;
         padding: 0 1rem;
         text-decoration: none;
       }

@@ -20,11 +20,6 @@ function fixPathForAsarUnpack(path) {
 FfmpegCommand.setFfmpegPath(fixPathForAsarUnpack(ffmpeg))
 FfmpegCommand.setFfprobePath(fixPathForAsarUnpack(ffprobe))
 
-function escape(string) {
-  const chars = ['*', '+', '?', '!', '{', '}', '[', ']', '(', ')', '|', '@']
-  return string.replace(new RegExp(`[\\${chars.join('\\')}]`, 'g'), (match) => `\\${match}`)
-}
-
 function probe(file) {
   return new Promise((resolve, reject) => {
     FfmpegCommand.ffprobe(file, (err, result) => {
