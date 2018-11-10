@@ -53,7 +53,7 @@ export default function (mainWindow) {
         for (const entry of entries) {
           const external = entry.format.filename !== file
           const { filename } = entry.format
-          const totalSubtitles = entry.streams.filter(({ codec_type: t }) => t === 'subtitle').length
+          const firstSubtitle = entry.streams.find(({ codec_type: t }) => t === 'subtitle').index
           for (const stream of entry.streams) {
             const _id = uuidv1()
             const {
@@ -87,7 +87,7 @@ export default function (mainWindow) {
                 // real index of internal subtitle used by subtitles filter
                 let rIndex = 0
                 if (!external) {
-                  rIndex = index - totalSubtitles - 1
+                  rIndex = index - firstSubtitle
                 }
                 subtitle.push({ ...info, rIndex })
                 break

@@ -161,6 +161,7 @@ nav {
     }
 
     .route-actions > :global(button) {
+      -webkit-app-region: no-drag;
       background: rgba(108, 110, 110, .8);
       border: 0;
       border-radius: 4px;
