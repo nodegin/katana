@@ -128,7 +128,8 @@ export default function (mainWindow) {
         command = command.videoFilters(`subtitles='${subtitle.filename}:si=${subtitle.rIndex}'`)
       }
 
-      command = command.outputOptions([
+      command = command
+        .outputOptions([
           '-x264-params keyint=48:scenecut=0',
           '-pix_fmt yuv420p',
           `-map 0:${video.index}`,
@@ -147,7 +148,7 @@ export default function (mainWindow) {
           mainWindow.webContents.send('video-transcode-progress', progress)
         })
         .on('error', (err, stdout, stderr) => {
-          console.log('An error occurred: ' + err.message, stderr)
+          console.log(`An error occurred: ${err.message}`, stderr)
         })
 
       previewStream.on('data', (chunk) => {
