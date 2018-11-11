@@ -48,7 +48,7 @@
     }
   },
   "dependencies": {
-    "acrylic-vibrancy": "^1.0.0",
+    "acrylic-vibrancy": "^1.1.0",
     "electron-util": "^0.10.1",
     "ffmpeg-static": "^2.3.0",
     "ffprobe-static": "^3.0.0",
