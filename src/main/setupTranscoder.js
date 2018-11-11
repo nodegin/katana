@@ -2,7 +2,6 @@ import path from 'path'
 import fs from 'fs-extra'
 import uuidv1 from 'uuid/v1'
 import { ipcMain } from 'electron'
-import { PassThrough } from 'stream'
 import { path as ffmpeg } from 'ffmpeg-static'
 import { path as ffprobe } from 'ffprobe-static'
 import FfmpegCommand from 'fluent-ffmpeg'
@@ -33,12 +32,11 @@ function probe(file) {
 }
 
 async function globSubtitles(video) {
-  const dir = path.dirname(video)
-  const [base, ext] = path.basename(video).split('.')
-  const re = new RegExp(`\\.(ass|srt|ssa|${ext})$`, 'i')
+  const { dir, name, ext } = path.parse(video)
+  const re = new RegExp(`\\.(ass|srt|ssa|${ext.slice(1)})$`, 'i')
   const results = await fs.readdir(dir)
   return results
-    .filter((file) => file.startsWith(base) && re.test(file))
+    .filter((file) => file.startsWith(name) && re.test(file))
     .map((file) => path.join(dir, file))
 }
 
@@ -108,10 +106,10 @@ export default function (mainWindow) {
 
   ipcMain.on('video-transcode-start', async (event, { video, audio, subtitle }) => {
     try {
-      const output = `${video.filename.split('.')[0]}_out.mp4`
+      const { dir, name } = path.parse(video.filename)
+      const output = `${dir}${name}_out.mp4`
 
       await fs.remove(output)
-      const previewStream = new PassThrough()
       const writeStream = fs.createWriteStream(output)
 
       let command = FfmpegCommand()
@@ -144,6 +142,9 @@ export default function (mainWindow) {
           '-movflags frag_keyframe+default_base_moof',
         ])
         .outputFormat('mp4')
+        .on('start', (cmd) => {
+          console.log(`Spawned Ffmpeg with command: ${cmd}`)
+        })
         .on('progress', (progress) => {
           mainWindow.webContents.send('video-transcode-progress', progress)
         })
@@ -151,18 +152,19 @@ export default function (mainWindow) {
           console.log(`An error occurred: ${err.message}`, stderr)
         })
 
-      previewStream.on('data', (chunk) => {
-        writeStream.write(chunk)
+      const ffstream = command.pipe()
+
+      ffstream.on('data', (chunk) => {
+        writeStream.write(chunk, 'binary')
         mainWindow.webContents.send('video-chunk', chunk)
       })
 
-      previewStream.on('end', () => {
+      ffstream.on('end', () => {
         writeStream.end()
         mainWindow.webContents.send('video-transcode-finished')
       })
 
       mainWindow.webContents.send('video-transcode-started')
-      command.pipe(previewStream)
     } catch (err) {
       console.log(err)
     }
