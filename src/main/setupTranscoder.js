@@ -107,7 +107,7 @@ export default function (mainWindow) {
   ipcMain.on('video-transcode-start', async (event, { video, audio, subtitle }) => {
     try {
       const { dir, name } = path.parse(video.filename)
-      const output = `${dir}${name}_out.mp4`
+      const output = path.join(dir, `${name}_out.mp4`)
 
       await fs.remove(output)
       const writeStream = fs.createWriteStream(output)
