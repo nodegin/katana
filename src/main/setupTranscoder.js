@@ -44,7 +44,6 @@ export default function (mainWindow) {
   ipcMain.on('parse-video-info', async (event, file) => {
     try {
       let entries = await globSubtitles(file)
-      console.log(entries)
       entries = await Promise.all(entries.map(probe))
       const video = []
       const audio = []
@@ -107,16 +106,16 @@ export default function (mainWindow) {
   ipcMain.on('video-transcode-start', async (event, { video, audio, subtitle }) => {
     try {
       const { dir, name } = path.parse(video.filename)
-      const output = path.join(dir, `${name}_out.mp4`)
+      const output = path.join(dir, `out_${name}.mp4`)
 
       await fs.remove(output)
       const writeStream = fs.createWriteStream(output)
 
       let command = FfmpegCommand()
         .input(video.filename)
+        .videoCodec('libx264')
         .audioCodec('aac')
         .audioChannels(2)
-        .videoCodec('libx264')
 
       if (['dvd_subtitle', 'hdmv_pgs_subtitle'].indexOf(subtitle.codec) >= 0) {
         // picture sub
@@ -128,16 +127,18 @@ export default function (mainWindow) {
 
       command = command
         .outputOptions([
-          '-x264-params keyint=48:scenecut=0',
-          '-pix_fmt yuv420p',
           `-map 0:${video.index}`,
           `-map 0:${audio.index}`,
           '-map_chapters -1',
           '-map_metadata -1',
-          '-vsync 2',
-          '-reset_timestamps 1',
           '-preset fast',
           '-crf 18',
+          '-x264-params keyint=48:scenecut=0',
+          '-pix_fmt yuv420p',
+          '-maxrate 20M',
+          '-bufsize 20M',
+          '-reset_timestamps 1',
+          '-vsync 2',
           '-threads 0',
           '-movflags frag_keyframe+default_base_moof',
         ])
@@ -149,7 +150,7 @@ export default function (mainWindow) {
           mainWindow.webContents.send('video-transcode-progress', progress)
         })
         .on('error', (err, stdout, stderr) => {
-          console.log(`An error occurred: ${err.message}`, stderr)
+          console.log(`An error occurred during transcode: ${err.message}`, stderr)
         })
 
       const ffstream = command.pipe()
@@ -161,7 +162,24 @@ export default function (mainWindow) {
 
       ffstream.on('end', () => {
         writeStream.end()
-        mainWindow.webContents.send('video-transcode-finished')
+        // Finalize the mp4 to make it seekable
+        // see: https://stackoverflow.com/questions/34123272
+        mainWindow.webContents.send('video-transcode-finalizing')
+        const retranscode = path.join(dir, `.out_${name}.mp4`)
+        FfmpegCommand()
+          .input(output)
+          .videoCodec('copy')
+          .audioCodec('copy')
+          .output(retranscode)
+          .on('error', (err, stdout, stderr) => {
+            console.log(`An error occurred during finalize: ${err.message}`, stderr)
+          })
+          .on('end', async () => {
+            await fs.remove(output)
+            await fs.rename(retranscode, output)
+            mainWindow.webContents.send('video-transcode-finished')
+          })
+          .run()
       })
 
       mainWindow.webContents.send('video-transcode-started')

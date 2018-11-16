@@ -80,8 +80,9 @@
 </template>
 
 <script>
-import path from 'path'
 import { ipcRenderer } from 'electron'
+import path from 'path'
+import { mapMutations } from 'vuex'
 import Loader from '@/components/Loader'
 
 const BUFFER_SIZE = 50 * 1024 * 1024 // 50 mb per chunk. is it possible to have bigger than this?
@@ -137,10 +138,12 @@ export default {
     },
   },
   beforeDestroy() {
+    this.setPreventUnload(false)
     ipcRenderer.removeListener('video-info-parsed', this.onVideoInfoParsed)
     ipcRenderer.removeListener('video-transcode-started', this.onVideoTranscodeStarted)
     ipcRenderer.removeListener('video-transcode-progress', this.onVideoTranscodeProgress)
     ipcRenderer.removeListener('video-chunk', this.onVideoChunk)
+    ipcRenderer.removeListener('video-transcode-finalizing', this.onVideoTranscodeFinalizing)
     ipcRenderer.removeListener('video-transcode-finished', this.onVideoTranscodeFinished)
   },
   mounted() {
@@ -148,9 +151,13 @@ export default {
     ipcRenderer.addListener('video-transcode-started', this.onVideoTranscodeStarted)
     ipcRenderer.addListener('video-transcode-progress', this.onVideoTranscodeProgress)
     ipcRenderer.addListener('video-chunk', this.onVideoChunk)
+    ipcRenderer.addListener('video-transcode-finalizing', this.onVideoTranscodeFinalizing)
     ipcRenderer.addListener('video-transcode-finished', this.onVideoTranscodeFinished)
   },
   methods: {
+    ...mapMutations('app', [
+      'setPreventUnload',
+    ]),
     handleFileDrop({ dataTransfer: { files: [file] } }) {
       this.isDragOver = false
       if (!file) {
@@ -192,6 +199,7 @@ export default {
       this.isLoading = true
     },
     async onVideoTranscodeStarted() {
+      this.setPreventUnload(true)
       this.transcodeStartTime = Date.now()
       this.isLoading = false
       await this.$nextTick()
@@ -246,10 +254,15 @@ export default {
         this.lastUpdate = now
       }
     },
-    onVideoTranscodeFinished() {
+    onVideoTranscodeFinalizing() {
       this.sourceBuffer.abort()
       this.mediaSource.removeSourceBuffer(this.sourceBuffer)
       window.URL.revokeObjectURL(this.$refs.preview.src)
+      this.isLoading = true
+    },
+    onVideoTranscodeFinished() {
+      this.setPreventUnload(false)
+      this.isLoading = false
       this.isFinished = true
     },
     startOver() {

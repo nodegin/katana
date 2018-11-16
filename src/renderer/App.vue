@@ -9,10 +9,9 @@
         <li
           v-for="route in routes" :key="route.path"
           :class="{ isCurrent: route.path === $route.path }"
+          @click="jumpTo(route.path)"
         >
-          <router-link :to="{ path: route.path }">
-            {{ route.meta.title }}
-          </router-link>
+          {{ route.meta.title }}
         </li>
       </ul>
     </nav>
@@ -38,6 +37,7 @@
 
 <script>
 import { remote, ipcRenderer } from 'electron'
+import { mapState } from 'vuex'
 
 export default {
   name: 'App',
@@ -47,6 +47,9 @@ export default {
     }
   },
   computed: {
+    ...mapState('app', [
+      'preventUnload',
+    ]),
     routes() {
       return this.$router.options.routes.filter(({ path }) => path !== '/')
     },
@@ -58,10 +61,21 @@ export default {
   },
   methods: {
     closeWindow() {
+      // eslint-disable-next-line
+      if (this.preventUnload && !confirm('Are you sure to leave?')) {
+        return
+      }
       remote.getCurrentWindow().close()
     },
     minimizeWindow() {
       remote.getCurrentWindow().minimize()
+    },
+    jumpTo(path) {
+      // eslint-disable-next-line
+      if (this.preventUnload && !confirm('Are you sure to leave?')) {
+        return
+      }
+      this.$router.replace({ path })
     },
   },
 }
@@ -120,6 +134,14 @@ nav {
     padding: 0;
 
     li {
+      align-items: center;
+      color: inherit;
+      cursor: pointer;
+      display: flex;
+      height: 3rem;
+      padding: 0 1rem;
+      text-decoration: none;
+
       &.isCurrent {
         background: rgba(255, 255, 255, .1);
         box-shadow: 0 -1px rgba(255, 255, 255, .15), 0 1px rgba(255, 255, 255, .15);
@@ -127,16 +149,6 @@ nav {
 
       &:not(:first-child) {
         margin-top: .4rem;
-      }
-
-      > a {
-        align-items: center;
-        color: inherit;
-        display: flex;
-        height: 3rem;
-        outline: 0 !important;
-        padding: 0 1rem;
-        text-decoration: none;
       }
     }
   }
