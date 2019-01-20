@@ -40,7 +40,15 @@ async function globSubtitles(video) {
     .map((file) => path.join(dir, file))
 }
 
+let activeCommand = null
+
 export default function (mainWindow) {
+  ipcMain.on('terminate-process', async (event, file) => {
+    if (activeCommand) {
+      activeCommand.kill()
+    }
+  })
+
   ipcMain.on('parse-video-info', async (event, file) => {
     try {
       let entries = await globSubtitles(file)
@@ -111,7 +119,7 @@ export default function (mainWindow) {
       await fs.remove(output)
       const writeStream = fs.createWriteStream(output)
 
-      let command = FfmpegCommand()
+      activeCommand = FfmpegCommand()
         .input(video.filename)
         .videoCodec('libx264')
         .audioCodec('aac')
@@ -119,13 +127,15 @@ export default function (mainWindow) {
 
       if (['dvd_subtitle', 'hdmv_pgs_subtitle'].indexOf(subtitle.codec) >= 0) {
         // picture sub
-        command = command.complexFilter(`[0:s:${subtitle.rIndex}]scale=${video.width}:${video.height}[sub];[0:v][sub]overlay'`)
+        activeCommand = activeCommand.complexFilter(`[0:s:${subtitle.rIndex}]scale=${video.width}:${video.height}[sub];[0:v][sub]overlay'`)
       } else {
         // text sub
-        command = command.videoFilters(`subtitles='${subtitle.filename}:si=${subtitle.rIndex}'`)
+        activeCommand = activeCommand.videoFilters(`subtitles='${subtitle.filename}:si=${subtitle.rIndex}'`)
       }
 
-      command = command
+      let ffstream
+
+      activeCommand = activeCommand
         .outputOptions([
           `-map 0:${video.index}`,
           `-map 0:${audio.index}`,
@@ -150,10 +160,31 @@ export default function (mainWindow) {
           mainWindow.webContents.send('video-transcode-progress', progress)
         })
         .on('error', (err, stdout, stderr) => {
-          console.log(`An error occurred during transcode: ${err.message}`, stderr)
+          console.log(`An error occurred during transcode: ${err.message}`)
+        })
+        .on('end', () => {
+          // Finalize the mp4 to make it seekable
+          // see: https://stackoverflow.com/questions/34123272
+          mainWindow.webContents.send('video-transcode-finalizing')
+          const retranscode = path.join(dir, `.out_${name}.mp4`)
+          FfmpegCommand()
+            .input(output)
+            .videoCodec('copy')
+            .audioCodec('copy')
+            .output(retranscode)
+            .on('error', (err, stdout, stderr) => {
+              console.log(`An error occurred during finalize: ${err.message}`, stderr)
+            })
+            .on('end', async () => {
+              await fs.remove(output)
+              await fs.rename(retranscode, output)
+              mainWindow.webContents.send('video-transcode-finished')
+              activeCommand = null
+            })
+            .run()
         })
 
-      const ffstream = command.pipe()
+      ffstream = activeCommand.pipe()
 
       ffstream.on('data', (chunk) => {
         writeStream.write(chunk, 'binary')
@@ -162,27 +193,34 @@ export default function (mainWindow) {
 
       ffstream.on('end', () => {
         writeStream.end()
-        // Finalize the mp4 to make it seekable
-        // see: https://stackoverflow.com/questions/34123272
-        mainWindow.webContents.send('video-transcode-finalizing')
-        const retranscode = path.join(dir, `.out_${name}.mp4`)
-        FfmpegCommand()
-          .input(output)
-          .videoCodec('copy')
-          .audioCodec('copy')
-          .output(retranscode)
-          .on('error', (err, stdout, stderr) => {
-            console.log(`An error occurred during finalize: ${err.message}`, stderr)
-          })
-          .on('end', async () => {
-            await fs.remove(output)
-            await fs.rename(retranscode, output)
-            mainWindow.webContents.send('video-transcode-finished')
-          })
-          .run()
       })
 
       mainWindow.webContents.send('video-transcode-started')
+    } catch (err) {
+      console.log(err)
+    }
+  })
+
+  ipcMain.on('subtitle-extract-start', async (event, subtitle) => {
+    try {
+      const { dir, name } = path.parse(subtitle.filename)
+      const output = path.join(dir, `${name}.${subtitle.codec}`)
+
+      activeCommand = FfmpegCommand()
+        .input(subtitle.filename)
+        .outputOptions([
+          `-map 0:s:${subtitle.rIndex}`,
+        ])
+        .output(output)
+        .on('error', (err, stdout, stderr) => {
+          console.log(`An error occurred during extract: ${err.message}`)
+        })
+        .on('end', () => {
+          mainWindow.webContents.send('subtitle-extract-finished')
+          activeCommand = null
+        })
+        .run()
+
     } catch (err) {
       console.log(err)
     }

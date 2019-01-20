@@ -65,6 +65,7 @@ export default {
       if (this.preventUnload && !confirm('Are you sure to leave?')) {
         return
       }
+      ipcRenderer.send('terminate-process')
       remote.getCurrentWindow().close()
     },
     minimizeWindow() {
@@ -75,6 +76,7 @@ export default {
       if (this.preventUnload && !confirm('Are you sure to leave?')) {
         return
       }
+      ipcRenderer.send('terminate-process')
       this.$router.replace({ path })
     },
   },

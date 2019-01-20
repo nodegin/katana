@@ -3,6 +3,7 @@ import Router from 'vue-router'
 
 import HomeView from '@/components/HomeView'
 import SingleConversionView from '@/components/SingleConversionView'
+import SubtitleExtractView from '@/components/SubtitleExtractView'
 
 Vue.use(Router)
 
@@ -16,6 +17,11 @@ export default new Router({
       path: '/single-conversion',
       component: SingleConversionView,
       meta: { title: 'Single Conversion' },
+    },
+    {
+      path: '/subtitle-extract',
+      component: SubtitleExtractView,
+      meta: { title: 'Subtitle Extract' },
     },
     {
       path: '/multi-conversion',

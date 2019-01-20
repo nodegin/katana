@@ -1,17 +1,9 @@
 <template>
   <main>
-    <template v-if="isLoading">
-      <loader />
-    </template>
-    <div v-else-if="isFinished" class="transcode-finished">
-      <div>
-        <i class="mdi mdi-check" />
-        <h1>Transcode Finished</h1>
-        <a href="#" @click.prevent="startOver">Done</a>
-      </div>
-    </div>
+    <loader v-if="isLoading" />
+    <finish-message v-else-if="isFinished" />
     <div v-else-if="transcodeStartTime" class="transcode-detail">
-      <video ref="preview" autoplay width="100%" @click="toggleMute" />
+      <video ref="preview" autoplay @click="toggleMute" />
       <h1>Transcode In Progress</h1>
       <div v-if="currentProgress" class="progress">
         <span>{{ currentProgress.currentFps }} fps</span>
@@ -24,40 +16,10 @@
       </div>
     </div>
     <template v-else-if="videoInfo">
-      <div v-for="{ type, icon, title } in categories" :key="type" class="video-info">
-        <div class="category">
-          <i :class="`mdi mdi-${icon}`" />
-          <span>{{ title }}</span>
-        </div>
-        <div
-          v-for="track in videoInfo[type]"
-          :key="track._id"
-          :class="{
-            track: true,
-            selected: selectedTracks[type] && selectedTracks[type]._id === track._id,
-          }"
-          @click="updateSelectedTrack(type, track)"
-        >
-          <header>
-            <div class="track-index">
-              {{ track.external ? 'External' : 'Internal' }} Track
-              <template v-if="type === 'subtitle' && !track.external">
-                {{ `${track.index} -> ${track.rIndex}` }}
-              </template>
-              <template v-else>
-                {{ track.index }}
-              </template>
-            </div>
-            {{ track.title }}
-            <template v-if="type === 'video'">
-              ({{ track.width }}x{{ track.height }})
-            </template>
-            <div class="spacer" />
-            {{ track.codec }} ({{ track.language || 'und' }})
-          </header>
-          <footer>{{ basename(track.filename) }}</footer>
-        </div>
-      </div>
+      <video-info
+        v-model="selectedTracks"
+        :info-data="videoInfo"
+      />
       <portal to="route-actions">
         <button @click="startTranscode">
           Next
@@ -65,25 +27,17 @@
         </button>
       </portal>
     </template>
-    <template v-else>
-      <div
-        class="video-dropzone"
-        @dragover.prevent
-        @dragenter="isDragOver = true"
-        @dragleave="isDragOver = false"
-        @drop.prevent="handleFileDrop"
-      >
-        {{ isDragOver ? 'Drop stream here' : 'Drag video stream over here' }}
-      </div>
-    </template>
+    <video-dropzone v-else @drop="handleFileDrop" />
   </main>
 </template>
 
 <script>
 import { ipcRenderer } from 'electron'
-import path from 'path'
 import { mapMutations } from 'vuex'
 import Loader from '@/components/Loader'
+import FinishMessage from '@/components/FinishMessage'
+import VideoInfo from '@/components/VideoInfo'
+import VideoDropzone from '@/components/VideoDropzone'
 
 const BUFFER_SIZE = 50 * 1024 * 1024 // 50 mb per chunk. is it possible to have bigger than this?
 
@@ -91,17 +45,14 @@ export default {
   name: 'SingleConversionView',
   components: {
     Loader,
+    FinishMessage,
+    VideoInfo,
+    VideoDropzone,
   },
   data() {
     return {
       isLoading: false,
-      isDragOver: false,
       videoInfo: null,
-      categories: [
-        { type: 'video', title: 'Video', icon: 'filmstrip' },
-        { type: 'audio', title: 'Audio', icon: 'headphones' },
-        { type: 'subtitle', title: 'Subtitle', icon: 'subtitles-outline' },
-      ],
       selectedTracks: {
         video: null,
         audio: null,
@@ -121,9 +72,11 @@ export default {
   },
   computed: {
     completionETA() {
+      // https://stackoverflow.com/a/852718/3896501
       const elapsedTime = Date.now() - this.transcodeStartTime
-      const remainMills = (elapsedTime * 100) / this.currentProgress.percent
-      let remainSeconds = Math.floor(remainMills / 1000)
+      const estimatedRemaining = (elapsedTime * (100 / this.currentProgress.percent)) - elapsedTime
+      // format seconds
+      let remainSeconds = Math.floor(estimatedRemaining / 1000)
       const hours = Math.floor(remainSeconds / 3600)
       remainSeconds %= 3600
       let minutes = Math.floor(remainSeconds / 60).toString()
@@ -158,28 +111,13 @@ export default {
     ...mapMutations('app', [
       'setPreventUnload',
     ]),
-    handleFileDrop({ dataTransfer: { files: [file] } }) {
-      this.isDragOver = false
-      if (!file) {
-        alert('No file was found.')
-        return
-      }
-      ipcRenderer.send('parse-video-info', file.path)
+    handleFileDrop([path]) {
+      ipcRenderer.send('parse-video-info', path)
       this.isLoading = true
     },
     onVideoInfoParsed(event, data) {
       this.isLoading = false
       this.videoInfo = data
-    },
-    basename(filename) {
-      return path.basename(filename)
-    },
-    updateSelectedTrack(type, track) {
-      if (this.selectedTracks[type] && this.selectedTracks[type]._id === track._id) {
-        this.selectedTracks[type] = null
-      } else {
-        this.selectedTracks[type] = track
-      }
     },
     startTranscode() {
       const { video, audio, subtitle } = this.selectedTracks
@@ -265,40 +203,20 @@ export default {
       this.isLoading = false
       this.isFinished = true
     },
-    startOver() {
-      const { path } = this.$route
-      this.$router.push({ path: '/404' })
-      this.$nextTick(() => this.$router.push({ path }))
-    },
   },
 }
 </script>
 
 <style scoped lang="scss">
-.transcode-finished {
-  align-items: center;
-  display: flex;
-  height: 100%;
-  justify-content: center;
-
-  > div {
-    text-align: center;
-
-    > i {
-      color: #85d085;
-      font-size: 5rem;
-    }
-
-    > h1 {
-      margin: 2rem 0;
-    }
-  }
-}
-
 .transcode-detail {
   display: flex;
   flex-direction: column;
   height: 100%;
+
+  > video {
+    max-height: 480px;
+    width: 100%;
+  }
 
   > h1 {
     height: 4rem;
@@ -328,67 +246,5 @@ export default {
       height: 4px;
     }
   }
-}
-
-.video-info {
-  .category {
-    align-items: center;
-    display: flex;
-    font-size: 1.5rem;
-    height: 4rem;
-
-    > i { margin: 0 2rem; }
-  }
-
-  .track {
-    border: 2px solid #455d6b;
-    cursor: pointer;
-    padding: 1rem 2rem;
-    transition: border-color .2s;
-
-    & + .track {
-      margin-top: -2px;
-    }
-
-    &.selected {
-      border-color: #86e3ff;
-      position: relative;
-      z-index: 1;
-    }
-
-    header {
-      display: flex;
-      font-size: 1.2rem;
-
-      .track-index {
-        color: #86e3ff;
-        width: 14rem;
-      }
-      .spacer { flex: 1; }
-    }
-
-    footer {
-      color: #afafaf;
-      font-size: .9rem;
-      margin-top: .5rem;
-      word-break: break-all;
-    }
-  }
-}
-
-.video-dropzone {
-  align-items: center;
-  border: 2px dashed #455d6b;
-  border-radius: 1rem;
-  bottom: 2rem;
-  box-sizing: border-box;
-  color: #86e3ff;
-  display: flex;
-  font-size: 1.5rem;
-  justify-content: center;
-  left: 2rem;
-  position: absolute;
-  right: 2rem;
-  top: 2rem;
 }
 </style>
