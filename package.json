@@ -1,7 +1,7 @@
 {
   "name": "katana",
   "author": "nodegin",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A certain media transcoder",
   "license": "MIT",
   "main": "./dist/electron/main.js",

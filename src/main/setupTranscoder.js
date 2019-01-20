@@ -43,7 +43,7 @@ async function globSubtitles(video) {
 let activeCommand = null
 
 export default function (mainWindow) {
-  ipcMain.on('terminate-process', async (event, file) => {
+  ipcMain.on('terminate-process', async () => {
     if (activeCommand) {
       activeCommand.kill()
     }
@@ -133,8 +133,6 @@ export default function (mainWindow) {
         activeCommand = activeCommand.videoFilters(`subtitles='${subtitle.filename}:si=${subtitle.rIndex}'`)
       }
 
-      let ffstream
-
       activeCommand = activeCommand
         .outputOptions([
           `-map 0:${video.index}`,
@@ -159,8 +157,8 @@ export default function (mainWindow) {
         .on('progress', (progress) => {
           mainWindow.webContents.send('video-transcode-progress', progress)
         })
-        .on('error', (err, stdout, stderr) => {
-          console.log(`An error occurred during transcode: ${err.message}`)
+        .on('error', ({ message }) => {
+          console.log(`An error occurred during transcode: ${message}`)
         })
         .on('end', () => {
           // Finalize the mp4 to make it seekable
@@ -172,8 +170,8 @@ export default function (mainWindow) {
             .videoCodec('copy')
             .audioCodec('copy')
             .output(retranscode)
-            .on('error', (err, stdout, stderr) => {
-              console.log(`An error occurred during finalize: ${err.message}`, stderr)
+            .on('error', ({ message }, stdout, stderr) => {
+              console.log(`An error occurred during finalize: ${message}`, stderr)
             })
             .on('end', async () => {
               await fs.remove(output)
@@ -184,7 +182,7 @@ export default function (mainWindow) {
             .run()
         })
 
-      ffstream = activeCommand.pipe()
+      const ffstream = activeCommand.pipe()
 
       ffstream.on('data', (chunk) => {
         writeStream.write(chunk, 'binary')
@@ -212,15 +210,14 @@ export default function (mainWindow) {
           `-map 0:s:${subtitle.rIndex}`,
         ])
         .output(output)
-        .on('error', (err, stdout, stderr) => {
-          console.log(`An error occurred during extract: ${err.message}`)
+        .on('error', ({ message }) => {
+          console.log(`An error occurred during extract: ${message}`)
         })
         .on('end', () => {
           mainWindow.webContents.send('subtitle-extract-finished')
           activeCommand = null
         })
         .run()
-
     } catch (err) {
       console.log(err)
     }
