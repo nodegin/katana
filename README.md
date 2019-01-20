@@ -7,6 +7,7 @@
 Provides the following functionalities:
 
 - Burn subtitle into video with live video preview while transcoding
+- Extract subtitle from MKV containers
 
 ## To Use
 
