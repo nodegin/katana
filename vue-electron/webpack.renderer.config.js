@@ -35,23 +35,23 @@ const rendererConfig = {
     rules: [
       {
         test: /\.scss$/,
-        use: ['vue-style-loader', 'css-loader', 'sass-loader'],
+        use: ['style-loader', 'css-loader', 'sass-loader'],
       },
       {
         test: /\.sass$/,
-        use: ['vue-style-loader', 'css-loader', 'sass-loader?indentedSyntax'],
+        use: ['style-loader', 'css-loader', 'sass-loader?indentedSyntax'],
       },
       {
         test: /\.less$/,
-        use: ['vue-style-loader', 'css-loader', 'less-loader'],
+        use: ['style-loader', 'css-loader', 'less-loader'],
       },
       {
         test: /\.css$/,
-        use: ['vue-style-loader', 'css-loader'],
+        use: ['style-loader', 'css-loader'],
       },
       {
         test: /\.html$/,
-        use: 'vue-html-loader',
+        use: 'html-loader',
       },
       {
         enforce: 'pre',
@@ -75,9 +75,9 @@ const rendererConfig = {
           options: {
             extractCSS: process.env.NODE_ENV === 'production',
             loaders: {
-              sass: 'vue-style-loader!css-loader!sass-loader?indentedSyntax=1',
-              scss: 'vue-style-loader!css-loader!sass-loader',
-              less: 'vue-style-loader!css-loader!less-loader',
+              sass: 'style-loader!css-loader!sass-loader?indentedSyntax',
+              scss: 'style-loader!css-loader!sass-loader',
+              less: 'style-loader!css-loader!less-loader',
             },
           },
         },

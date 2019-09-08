@@ -124,6 +124,8 @@ export default function (mainWindow) {
         .videoCodec('libx264')
         .audioCodec('aac')
         .audioChannels(2)
+        .audioBitrate('256k')
+        .audioFrequency(48000)
 
       if (['dvd_subtitle', 'hdmv_pgs_subtitle'].indexOf(subtitle.codec) >= 0) {
         // picture sub
@@ -139,14 +141,12 @@ export default function (mainWindow) {
           `-map 0:${audio.index}`,
           '-map_chapters -1',
           '-map_metadata -1',
-          '-preset fast',
-          '-crf 18',
+          '-preset slow',
+          '-crf 22',
           '-x264-params keyint=48:scenecut=0',
           '-pix_fmt yuv420p',
           '-maxrate 20M',
           '-bufsize 20M',
-          '-reset_timestamps 1',
-          '-vsync 2',
           '-threads 0',
           '-movflags frag_keyframe+default_base_moof',
         ])

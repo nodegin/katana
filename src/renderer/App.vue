@@ -177,7 +177,7 @@ nav {
       flex: 1;
     }
 
-    .route-actions > :global(button) {
+    .route-actions::v-deep button {
       -webkit-app-region: no-drag;
       background: rgba(108, 110, 110, .8);
       border: 0;
